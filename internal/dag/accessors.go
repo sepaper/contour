@@ -160,8 +160,10 @@ func (d *DAG) GetClusters() []*Cluster {
 			for _, route := range vhost.Routes {
 				res = append(res, route.Clusters...)
 
-				if route.MirrorPolicy != nil && route.MirrorPolicy.Cluster != nil {
-					res = append(res, route.MirrorPolicy.Cluster)
+				for _, mirrorPolicy := range route.MirrorPolicies {
+					if mirrorPolicy.Cluster != nil {
+						res = append(res, mirrorPolicy.Cluster)
+					}
 				}
 			}
 		}
@@ -170,8 +172,10 @@ func (d *DAG) GetClusters() []*Cluster {
 			for _, route := range vhost.Routes {
 				res = append(res, route.Clusters...)
 
-				if route.MirrorPolicy != nil && route.MirrorPolicy.Cluster != nil {
-					res = append(res, route.MirrorPolicy.Cluster)
+				for _, mirrorPolicy := range route.MirrorPolicies {
+					if mirrorPolicy.Cluster != nil {
+						res = append(res, mirrorPolicy.Cluster)
+					}
 				}
 			}
 

@@ -702,15 +702,15 @@ func (p *HTTPProxyProcessor) computeRoutes(
 				ClientCertificate:     clientCertSecret,
 				TimeoutPolicy:         ctp,
 			}
-			if service.Mirror && r.MirrorPolicy != nil {
+			if service.Mirror && len(r.MirrorPolicies) != 0 {
 				validCond.AddError(contour_api_v1.ConditionTypeServiceError, "OnlyOneMirror",
 					"only one service per route may be nominated as mirror")
 				return nil
 			}
 			if service.Mirror {
-				r.MirrorPolicy = &MirrorPolicy{
+				r.MirrorPolicies = []*MirrorPolicy{{
 					Cluster: c,
-				}
+				}}
 			} else {
 				r.Clusters = append(r.Clusters, c)
 			}

@@ -352,13 +352,17 @@ func hashPolicy(requestHashPolicies []dag.RequestHashPolicy) []*envoy_route_v3.R
 }
 
 func mirrorPolicy(r *dag.Route) []*envoy_route_v3.RouteAction_RequestMirrorPolicy {
-	if r.MirrorPolicy == nil {
-		return nil
+	var mp []*envoy_route_v3.RouteAction_RequestMirrorPolicy
+
+	for _, mirrorPolicy := range r.MirrorPolicies {
+		if mirrorPolicy.Cluster != nil {
+			mp = append(mp, &envoy_route_v3.RouteAction_RequestMirrorPolicy{
+				Cluster: envoy.Clustername(mirrorPolicy.Cluster),
+			})
+		}
 	}
 
-	return []*envoy_route_v3.RouteAction_RequestMirrorPolicy{{
-		Cluster: envoy.Clustername(r.MirrorPolicy.Cluster),
-	}}
+	return mp
 }
 
 func retryPolicy(r *dag.Route) *envoy_route_v3.RetryPolicy {

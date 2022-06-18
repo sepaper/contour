@@ -1019,7 +1019,7 @@ func (p *GatewayAPIProcessor) computeHTTPRoute(route *gatewayapi_v1alpha2.HTTPRo
 			headerPolicy       *HeadersPolicy
 			headerModifierSeen bool
 			redirect           *gatewayapi_v1alpha2.HTTPRequestRedirectFilter
-			mirrorPolicy       *MirrorPolicy
+			mirrorPolicies     []*MirrorPolicy
 		)
 
 		for _, filter := range rule.Filters {
@@ -1050,22 +1050,17 @@ func (p *GatewayAPIProcessor) computeHTTPRoute(route *gatewayapi_v1alpha2.HTTPRo
 				// Get the mirror filter if there is one. If there are more than one
 				// mirror filters, "NotImplemented" condition on the Route is set to
 				// status: True, with the "NotImplemented" reason.
-				if mirrorPolicy != nil {
-					routeAccessor.AddCondition(status.ConditionNotImplemented, metav1.ConditionTrue, status.ReasonNotImplemented, "HTTPRoute.Spec.Rules.Filters: Only one mirror filter is supported.")
-					continue
-				}
-
 				if filter.RequestMirror != nil {
 					mirrorService, cond := p.validateBackendObjectRef(filter.RequestMirror.BackendRef, "Spec.Rules.Filters.RequestMirror.BackendRef", KindHTTPRoute, route.Namespace)
 					if cond != nil {
 						routeAccessor.AddCondition(gatewayapi_v1alpha2.RouteConditionType(cond.Type), cond.Status, status.RouteReasonType(cond.Reason), cond.Message)
 						continue
 					}
-					mirrorPolicy = &MirrorPolicy{
+					mirrorPolicies = append(mirrorPolicies, &MirrorPolicy{
 						Cluster: &Cluster{
 							Upstream: mirrorService,
 						},
-					}
+					})
 				}
 
 			default:
@@ -1082,7 +1077,7 @@ func (p *GatewayAPIProcessor) computeHTTPRoute(route *gatewayapi_v1alpha2.HTTPRo
 		if redirect != nil {
 			routes = p.redirectRoutes(matchconditions, headerPolicy, redirect)
 		} else {
-			routes = p.clusterRoutes(route.Namespace, matchconditions, headerPolicy, mirrorPolicy, rule.BackendRefs, routeAccessor)
+			routes = p.clusterRoutes(route.Namespace, matchconditions, headerPolicy, mirrorPolicies, rule.BackendRefs, routeAccessor)
 		}
 
 		// Add each route to the relevant vhost(s)/svhosts(s).
@@ -1249,7 +1244,7 @@ func gatewayHeaderMatchConditions(matches []gatewayapi_v1alpha2.HTTPHeaderMatch)
 }
 
 // clusterRoutes builds a []*dag.Route for the supplied set of matchConditions, headerPolicy and backendRefs.
-func (p *GatewayAPIProcessor) clusterRoutes(routeNamespace string, matchConditions []*matchConditions, headerPolicy *HeadersPolicy, mirrorPolicy *MirrorPolicy, backendRefs []gatewayapi_v1alpha2.HTTPBackendRef, routeAccessor *status.RouteConditionsUpdate) []*Route {
+func (p *GatewayAPIProcessor) clusterRoutes(routeNamespace string, matchConditions []*matchConditions, headerPolicy *HeadersPolicy, mirrorPolicies []*MirrorPolicy, backendRefs []gatewayapi_v1alpha2.HTTPBackendRef, routeAccessor *status.RouteConditionsUpdate) []*Route {
 	if len(backendRefs) == 0 {
 		routeAccessor.AddCondition(status.ConditionResolvedRefs, metav1.ConditionFalse, status.ReasonDegraded, "At least one Spec.Rules.BackendRef must be specified.")
 		return nil
@@ -1313,7 +1308,7 @@ func (p *GatewayAPIProcessor) clusterRoutes(routeNamespace string, matchConditio
 			PathMatchCondition:    mc.path,
 			HeaderMatchConditions: mc.headers,
 			RequestHeadersPolicy:  headerPolicy,
-			MirrorPolicy:          mirrorPolicy,
+			MirrorPolicies:        mirrorPolicies,
 		})
 	}
 

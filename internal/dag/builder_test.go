@@ -3109,6 +3109,52 @@ func TestDAGInsertGatewayAPI(t *testing.T) {
 				},
 			),
 		},
+		"HTTPRoute rule with multiple request mirror filters": {
+			gatewayclass: validClass,
+			gateway:      gatewayHTTPAllNamespaces,
+			objs: []interface{}{
+				kuardService,
+				kuardService2,
+				kuardService3,
+				&gatewayapi_v1alpha2.HTTPRoute{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "basic",
+						Namespace: "projectcontour",
+					},
+					Spec: gatewayapi_v1alpha2.HTTPRouteSpec{
+						CommonRouteSpec: gatewayapi_v1alpha2.CommonRouteSpec{
+							ParentRefs: []gatewayapi_v1alpha2.ParentReference{gatewayapi.GatewayParentRef("projectcontour", "contour")},
+						},
+						Hostnames: []gatewayapi_v1alpha2.Hostname{
+							"test.projectcontour.io",
+						},
+						Rules: []gatewayapi_v1alpha2.HTTPRouteRule{{
+							Matches:     gatewayapi.HTTPRouteMatch(gatewayapi_v1alpha2.PathMatchPathPrefix, "/"),
+							BackendRefs: gatewayapi.HTTPBackendRef("kuard", 8080, 1),
+							Filters: []gatewayapi_v1alpha2.HTTPRouteFilter{{
+								Type: gatewayapi_v1alpha2.HTTPRouteFilterRequestMirror,
+								RequestMirror: &gatewayapi_v1alpha2.HTTPRequestMirrorFilter{
+									BackendRef: gatewayapi.ServiceBackendObjectRef("kuard2", 8080),
+								}}, {
+								Type: gatewayapi_v1alpha2.HTTPRouteFilterRequestMirror,
+								RequestMirror: &gatewayapi_v1alpha2.HTTPRequestMirrorFilter{
+									BackendRef: gatewayapi.ServiceBackendObjectRef("kuard3", 8080),
+								},
+							},
+							},
+						}},
+					},
+				},
+			},
+			want: listeners(
+				&Listener{
+					Name: HTTP_LISTENER_NAME,
+					Port: 80,
+					VirtualHosts: virtualhosts(virtualhost("test.projectcontour.io",
+						withMirrors(prefixrouteHTTPRoute("/", service(kuardService)), service(kuardService2), service(kuardService3)))),
+				},
+			),
+		},
 		"different weights for multiple forwardTos": {
 			gatewayclass: validClass,
 			gateway:      gatewayHTTPAllNamespaces,
@@ -12829,10 +12875,20 @@ func exact(path string) MatchCondition  { return &ExactMatchCondition{Path: path
 func regex(regex string) MatchCondition { return &RegexMatchCondition{Regex: regex} }
 
 func withMirror(r *Route, mirror *Service) *Route {
-	r.MirrorPolicy = &MirrorPolicy{
+	r.MirrorPolicies = []*MirrorPolicy{{
 		Cluster: &Cluster{
 			Upstream: mirror,
 		},
+	}}
+	return r
+}
+func withMirrors(r *Route, mirrors ...*Service) *Route {
+	for _, mirror := range mirrors {
+		r.MirrorPolicies = append(r.MirrorPolicies, &MirrorPolicy{
+			Cluster: &Cluster{
+				Upstream: mirror,
+			},
+		})
 	}
 	return r
 }

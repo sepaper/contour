@@ -587,7 +587,7 @@ func TestRouteRoute(t *testing.T) {
 				},
 			},
 		},
-		"mirror": {
+		"single mirror": {
 			route: &dag.Route{
 				Clusters: []*dag.Cluster{{
 					Upstream: &dag.Service{
@@ -598,9 +598,8 @@ func TestRouteRoute(t *testing.T) {
 							ServicePort:      s1.Spec.Ports[0],
 						},
 					},
-					Weight: 90,
 				}},
-				MirrorPolicy: &dag.MirrorPolicy{
+				MirrorPolicies: []*dag.MirrorPolicy{{
 					Cluster: &dag.Cluster{
 						Upstream: &dag.Service{
 							Weighted: dag.WeightedService{
@@ -611,6 +610,52 @@ func TestRouteRoute(t *testing.T) {
 							},
 						},
 					},
+				}},
+			},
+			want: &envoy_route_v3.Route_Route{
+				Route: &envoy_route_v3.RouteAction{
+					ClusterSpecifier: &envoy_route_v3.RouteAction_Cluster{
+						Cluster: "default/kuard/8080/da39a3ee5e",
+					},
+					RequestMirrorPolicies: []*envoy_route_v3.RouteAction_RequestMirrorPolicy{{
+						Cluster: "default/kuard/8080/da39a3ee5e",
+					}},
+				},
+			},
+		},
+		"multiple mirrors": {
+			route: &dag.Route{
+				Clusters: []*dag.Cluster{{
+					Upstream: &dag.Service{
+						Weighted: dag.WeightedService{
+							Weight:           1,
+							ServiceName:      s1.Name,
+							ServiceNamespace: s1.Namespace,
+							ServicePort:      s1.Spec.Ports[0],
+						},
+					},
+				}},
+				MirrorPolicies: []*dag.MirrorPolicy{{
+					Cluster: &dag.Cluster{
+						Upstream: &dag.Service{
+							Weighted: dag.WeightedService{
+								Weight:           1,
+								ServiceName:      s1.Name,
+								ServiceNamespace: s1.Namespace,
+								ServicePort:      s1.Spec.Ports[0],
+							},
+						},
+					}}, {
+					Cluster: &dag.Cluster{
+						Upstream: &dag.Service{
+							Weighted: dag.WeightedService{
+								Weight:           1,
+								ServiceName:      s1.Name,
+								ServiceNamespace: s1.Namespace,
+								ServicePort:      s1.Spec.Ports[0],
+							},
+						},
+					}},
 				},
 			},
 			want: &envoy_route_v3.Route_Route{
@@ -619,6 +664,8 @@ func TestRouteRoute(t *testing.T) {
 						Cluster: "default/kuard/8080/da39a3ee5e",
 					},
 					RequestMirrorPolicies: []*envoy_route_v3.RouteAction_RequestMirrorPolicy{{
+						Cluster: "default/kuard/8080/da39a3ee5e",
+					}, {
 						Cluster: "default/kuard/8080/da39a3ee5e",
 					}},
 				},

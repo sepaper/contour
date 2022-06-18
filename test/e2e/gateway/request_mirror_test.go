@@ -37,7 +37,8 @@ func testRequestMirrorRule(namespace string) {
 		t := f.T()
 
 		f.Fixtures.Echo.Deploy(namespace, "echo-primary")
-		f.Fixtures.Echo.DeployN(namespace, "echo-shadow", 2)
+		f.Fixtures.Echo.DeployN(namespace, "echo-shadow1", 2)
+		f.Fixtures.Echo.DeployN(namespace, "echo-shadow2", 2)
 
 		route := &gatewayapi_v1alpha2.HTTPRoute{
 			ObjectMeta: metav1.ObjectMeta{
@@ -58,7 +59,12 @@ func testRequestMirrorRule(namespace string) {
 							{
 								Type: gatewayapi_v1alpha2.HTTPRouteFilterRequestMirror,
 								RequestMirror: &gatewayapi_v1alpha2.HTTPRequestMirrorFilter{
-									BackendRef: gatewayapi.ServiceBackendObjectRef("echo-shadow", 80),
+									BackendRef: gatewayapi.ServiceBackendObjectRef("echo-shadow1", 80),
+								},
+							}, {
+								Type: gatewayapi_v1alpha2.HTTPRouteFilterRequestMirror,
+								RequestMirror: &gatewayapi_v1alpha2.HTTPRequestMirrorFilter{
+									BackendRef: gatewayapi.ServiceBackendObjectRef("echo-shadow2", 80),
 								},
 							},
 						},
@@ -69,10 +75,22 @@ func testRequestMirrorRule(namespace string) {
 		}
 		f.CreateHTTPRouteAndWaitFor(route, httpRouteAccepted)
 
-		// Wait for "echo-shadow" deployment to be available
+		// Wait for "echo-shadow1" deployment to be available
 		require.Eventually(f.T(), func() bool {
 			d := &appsv1.Deployment{}
-			if err := f.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "echo-shadow"}, d); err != nil {
+			if err := f.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "echo-shadow1"}, d); err != nil {
+				return false
+			}
+			for _, c := range d.Status.Conditions {
+				return c.Type == appsv1.DeploymentAvailable && c.Status == corev1.ConditionTrue
+			}
+			return false
+		}, f.RetryTimeout, f.RetryInterval)
+
+		// Wait for "echo-shadow2" deployment to be available
+		require.Eventually(f.T(), func() bool {
+			d := &appsv1.Deployment{}
+			if err := f.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "echo-shadow2"}, d); err != nil {
 				return false
 			}
 			for _, c := range d.Status.Conditions {
@@ -89,12 +107,31 @@ func testRequestMirrorRule(namespace string) {
 		require.NotNil(t, res, "request never succeeded")
 		require.Truef(t, ok, "expected 200 response code, got %d", res.StatusCode)
 
-		// Ensure the request was mirrored to one of "echo-shadow" pods via logs
+		// Ensure the request was mirrored to one of pods in "echo-shadow1" deployment via logs
 		require.Eventually(t, func() bool {
 			var mirrored bool
 			mirrorLogRegexp := regexp.MustCompile(`Echoing back request made to \/mirror to client`)
 
-			logs, err := f.Fixtures.Echo.DumpEchoLogs(namespace, "echo-shadow")
+			logs, err := f.Fixtures.Echo.DumpEchoLogs(namespace, "echo-shadow1")
+			if err != nil {
+				return false
+			}
+
+			for _, log := range logs {
+				if mirrorLogRegexp.MatchString(string(log)) {
+					mirrored = true
+				}
+			}
+			return mirrored
+
+		}, f.RetryTimeout, f.RetryInterval)
+
+		// Ensure the request was mirrored to one of pods in "echo-shadow2" deployment via logs
+		require.Eventually(t, func() bool {
+			var mirrored bool
+			mirrorLogRegexp := regexp.MustCompile(`Echoing back request made to \/mirror to client`)
+
+			logs, err := f.Fixtures.Echo.DumpEchoLogs(namespace, "echo-shadow2")
 			if err != nil {
 				return false
 			}

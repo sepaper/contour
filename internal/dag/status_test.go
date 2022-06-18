@@ -2836,21 +2836,6 @@ func TestGatewayAPIHTTPRouteDAGStatus(t *testing.T) {
 		},
 	}
 
-	kuardService3 := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kuard3",
-			Namespace: "default",
-		},
-		Spec: v1.ServiceSpec{
-			Ports: []v1.ServicePort{{
-				Name:       "http",
-				Protocol:   "TCP",
-				Port:       8080,
-				TargetPort: intstr.FromInt(8080),
-			}},
-		},
-	}
-
 	run(t, "simple httproute", testcase{
 		objs: []interface{}{
 			kuardService,
@@ -4600,64 +4585,6 @@ func TestGatewayAPIHTTPRouteDAGStatus(t *testing.T) {
 				},
 			},
 		},
-	})
-
-	run(t, "More than one RequestMirror filters in HTTPRoute.Spec.Rules.Filters", testcase{
-		objs: []interface{}{
-			kuardService,
-			kuardService2,
-			kuardService3,
-			&gatewayapi_v1alpha2.HTTPRoute{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "basic",
-					Namespace: "default",
-					Labels: map[string]string{
-						"app": "contour",
-					},
-				},
-				Spec: gatewayapi_v1alpha2.HTTPRouteSpec{
-					CommonRouteSpec: gatewayapi_v1alpha2.CommonRouteSpec{
-						ParentRefs: []gatewayapi_v1alpha2.ParentReference{gatewayapi.GatewayParentRef("projectcontour", "contour")},
-					},
-					Hostnames: []gatewayapi_v1alpha2.Hostname{
-						"test.projectcontour.io",
-					},
-					Rules: []gatewayapi_v1alpha2.HTTPRouteRule{{
-						Matches:     gatewayapi.HTTPRouteMatch(gatewayapi_v1alpha2.PathMatchPathPrefix, "/"),
-						BackendRefs: gatewayapi.HTTPBackendRef("kuard", 8080, 1),
-						Filters: []gatewayapi_v1alpha2.HTTPRouteFilter{{
-							Type: gatewayapi_v1alpha2.HTTPRouteFilterRequestMirror,
-							RequestMirror: &gatewayapi_v1alpha2.HTTPRequestMirrorFilter{
-								BackendRef: gatewayapi.ServiceBackendObjectRef("kuard2", 8080),
-							},
-						}, {
-							Type: gatewayapi_v1alpha2.HTTPRouteFilterRequestMirror,
-							RequestMirror: &gatewayapi_v1alpha2.HTTPRequestMirrorFilter{
-								BackendRef: gatewayapi.ServiceBackendObjectRef("kuard3", 8080),
-							}},
-						},
-					}},
-				},
-			}},
-		wantRouteConditions: []*status.RouteConditionsUpdate{{
-			FullName: types.NamespacedName{Namespace: "default", Name: "basic"},
-			Conditions: map[gatewayapi_v1alpha2.RouteConditionType]metav1.Condition{
-				status.ConditionNotImplemented: {
-					Type:    string(status.ConditionNotImplemented),
-					Status:  contour_api_v1.ConditionTrue,
-					Reason:  string(status.ReasonNotImplemented),
-					Message: "HTTPRoute.Spec.Rules.Filters: Only one mirror filter is supported.",
-				},
-				gatewayapi_v1alpha2.RouteConditionAccepted: {
-					Type:    string(gatewayapi_v1alpha2.RouteConditionAccepted),
-					Status:  contour_api_v1.ConditionFalse,
-					Reason:  string(status.ReasonErrorsExist),
-					Message: "Errors found, check other Conditions for details.",
-				},
-			},
-		}},
-		// Invalid filters still result in an attached route.
-		wantGatewayStatusUpdate: validGatewayStatusUpdate("http", "HTTPRoute", 1),
 	})
 
 	run(t, "Invalid RequestMirror filter due to unspecified backendRef.name", testcase{

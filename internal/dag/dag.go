@@ -229,8 +229,8 @@ type Route struct {
 	// Indicates that during forwarding, the matched prefix (or path) should be swapped with this value
 	PrefixRewrite string
 
-	// Mirror Policy defines the mirroring policy for this Route.
-	MirrorPolicy *MirrorPolicy
+	// MirrorPolicies is a list of the mirroring policies for this Route.
+	MirrorPolicies []*MirrorPolicy
 
 	// RequestHeadersPolicy defines how headers are managed during forwarding
 	RequestHeadersPolicy *HeadersPolicy
